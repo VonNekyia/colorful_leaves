@@ -9,7 +9,7 @@ import net.minecraft.world.level.ChunkPos;
 import org.jspecify.annotations.Nullable;
 
 /** The leaf colours the server has sent, for the chunks the client holds. */
-final class LeafColors {
+public final class LeafColors {
 
     /** Set on every colour kept, so that none is ever 0 - which stands for no colour. */
     static final int PRESENT = 1 << 24;
@@ -26,7 +26,7 @@ final class LeafColors {
     }
 
     /** The colour the server gave this block as a tint, or 0 for none. */
-    static int tint(BlockPos pos) {
+    public static int tint(BlockPos pos) {
         int colour = at(pos);
         return colour == 0 ? 0 : 0xFF000000 | colour & 0xFFFFFF;
     }

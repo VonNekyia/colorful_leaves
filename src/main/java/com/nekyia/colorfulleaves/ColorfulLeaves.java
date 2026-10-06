@@ -3,6 +3,7 @@ package com.nekyia.colorfulleaves;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLevelEvents;
@@ -13,6 +14,7 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.minecraft.client.color.block.BlockColors;
 import net.minecraft.client.color.block.BlockTintSource;
+import net.minecraft.client.color.block.BlockTintSources;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Block;
@@ -25,12 +27,14 @@ import net.minecraft.world.level.block.state.properties.Property;
  * chunk, which leaves get which colour; which tree that is and why is the server's
  * business alone. The falling leaves take the colour of the leaf they fall from.
  *
- * <p>Only leaves whose models are tinted can take a colour: azalea, cherry, pale oak and
- * poplar leaves have theirs painted into the texture.
- *
  * <p>A tint only darkens the texture it lies on, and leaf textures are a mid grey - so a
  * white comes out grey. Where the server asks for it, the leaves are drawn with a lighter
  * copy of their texture instead, made from it by the palettes this mod brings along.
+ *
+ * <p>Azalea, cherry, pale oak and poplar leaves have their colour painted into the texture,
+ * which a tint would only muddy. Where the server gives them a colour, they are drawn with
+ * a grey copy of it, as light as oak's, and fall as tinted leaves; the flowers of flowering
+ * azalea keep their colour.
  *
  * <p>A bush standing on moss takes the moss's green, so that mistletoe - moss with a bush
  * on top, as builders hang it in crowns - reads as one clump.
@@ -40,6 +44,9 @@ public final class ColorfulLeaves implements ClientModInitializer {
     private static final List<Block> TINTED_LEAVES = List.of(Blocks.OAK_LEAVES, Blocks.SPRUCE_LEAVES,
             Blocks.BIRCH_LEAVES, Blocks.JUNGLE_LEAVES, Blocks.ACACIA_LEAVES, Blocks.DARK_OAK_LEAVES,
             Blocks.MANGROVE_LEAVES);
+    private static final List<Block> PAINTED_LEAVES = List.of(Blocks.AZALEA_LEAVES, Blocks.FLOWERING_AZALEA_LEAVES,
+            Blocks.CHERRY_LEAVES, Blocks.PALE_OAK_LEAVES, Blocks.RED_POPLAR_LEAVES, Blocks.ORANGE_POPLAR_LEAVES,
+            Blocks.YELLOW_POPLAR_LEAVES);
 
     @Override
     public void onInitializeClient() {
@@ -49,20 +56,24 @@ public final class ColorfulLeaves implements ClientModInitializer {
         ClientChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> LeafColors.forget(chunk.getPos()));
         ClientLevelEvents.AFTER_CLIENT_LEVEL_CHANGE.register((client, level) -> LeafColors.clear());
         ClientPlayConnectionEvents.DISCONNECT.register((listener, client) -> LeafColors.clear());
-        ModelLoadingPlugin.register(plugin -> plugin.modifyBlockModelAfterBake().register((model, context) ->
-                TINTED_LEAVES.contains(context.state().getBlock()) ? new BrightLeaves(model, context.state().getBlock())
-                        : model));
+        ModelLoadingPlugin.register(plugin -> plugin.modifyBlockModelAfterBake().register((model, context) -> {
+            Block block = context.state().getBlock();
+            return TINTED_LEAVES.contains(block) ? LeafModel.tinted(model, block)
+                    : PAINTED_LEAVES.contains(block) ? LeafModel.painted(model, block) : model;
+        }));
 
         // Once the game has set up its own tints, so that leaves without a colour from the
         // server look exactly as they would without the mod.
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
             BlockColors colors = client.getBlockColors();
-            for (Block leaves : TINTED_LEAVES) {
+            for (Block leaves : Stream.concat(TINTED_LEAVES.stream(), PAINTED_LEAVES.stream()).toList()) {
                 List<BlockTintSource> sources = new ArrayList<>(colors.getTintSources(leaves.defaultBlockState()));
-                if (!sources.isEmpty()) {
-                    sources.set(0, new LeafTint(sources.getFirst()));
-                    colors.register(sources, leaves);
+                if (sources.isEmpty()) {
+                    // Painted leaves have no tint of their own: white leaves them as they are.
+                    sources.add(BlockTintSources.constant(-1));
                 }
+                sources.set(0, new LeafTint(sources.getFirst()));
+                colors.register(sources, leaves);
             }
             List<BlockTintSource> bush = new ArrayList<>(colors.getTintSources(Blocks.BUSH.defaultBlockState()));
             if (!bush.isEmpty()) {

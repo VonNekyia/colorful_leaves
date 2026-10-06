@@ -69,6 +69,83 @@
       "permutations": {
         "colorfulleaves_bright": "colorfulleaves:mangrove_leaves_bright"
       }
+    },
+    {
+      "type": "minecraft:paletted_permutations",
+      "textures": [
+        "minecraft:block/azalea_leaves",
+        "minecraft:block/flowering_azalea_leaves"
+      ],
+      "palette_key": "colorfulleaves:azalea_leaves",
+      "permutations": {
+        "colorfulleaves_grey": "colorfulleaves:azalea_leaves_grey",
+        "colorfulleaves_bright": "colorfulleaves:azalea_leaves_bright"
+      }
+    },
+    {
+      "type": "minecraft:paletted_permutations",
+      "textures": [
+        "minecraft:block/flowering_azalea_leaves"
+      ],
+      "palette_key": "colorfulleaves:azalea_leaves",
+      "permutations": {
+        "colorfulleaves_flowers": "colorfulleaves:azalea_leaves_flowers"
+      }
+    },
+    {
+      "type": "minecraft:paletted_permutations",
+      "textures": [
+        "minecraft:block/cherry_leaves"
+      ],
+      "palette_key": "colorfulleaves:cherry_leaves",
+      "permutations": {
+        "colorfulleaves_grey": "colorfulleaves:cherry_leaves_grey",
+        "colorfulleaves_bright": "colorfulleaves:cherry_leaves_bright"
+      }
+    },
+    {
+      "type": "minecraft:paletted_permutations",
+      "textures": [
+        "minecraft:block/pale_oak_leaves"
+      ],
+      "palette_key": "colorfulleaves:pale_oak_leaves",
+      "permutations": {
+        "colorfulleaves_grey": "colorfulleaves:pale_oak_leaves_grey",
+        "colorfulleaves_bright": "colorfulleaves:pale_oak_leaves_bright"
+      }
+    },
+    {
+      "type": "minecraft:paletted_permutations",
+      "textures": [
+        "minecraft:block/red_poplar_leaves"
+      ],
+      "palette_key": "colorfulleaves:red_poplar_leaves",
+      "permutations": {
+        "colorfulleaves_grey": "colorfulleaves:red_poplar_leaves_grey",
+        "colorfulleaves_bright": "colorfulleaves:red_poplar_leaves_bright"
+      }
+    },
+    {
+      "type": "minecraft:paletted_permutations",
+      "textures": [
+        "minecraft:block/orange_poplar_leaves"
+      ],
+      "palette_key": "colorfulleaves:orange_poplar_leaves",
+      "permutations": {
+        "colorfulleaves_grey": "colorfulleaves:orange_poplar_leaves_grey",
+        "colorfulleaves_bright": "colorfulleaves:orange_poplar_leaves_bright"
+      }
+    },
+    {
+      "type": "minecraft:paletted_permutations",
+      "textures": [
+        "minecraft:block/yellow_poplar_leaves"
+      ],
+      "palette_key": "colorfulleaves:yellow_poplar_leaves",
+      "permutations": {
+        "colorfulleaves_grey": "colorfulleaves:yellow_poplar_leaves_grey",
+        "colorfulleaves_bright": "colorfulleaves:yellow_poplar_leaves_bright"
+      }
     }
   ]
 }

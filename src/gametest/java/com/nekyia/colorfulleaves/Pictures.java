@@ -23,6 +23,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
@@ -31,6 +32,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Pictures of the mod at work, for looking at rather than for asserting: plants a few
@@ -40,7 +42,8 @@ import net.minecraft.world.level.block.state.BlockState;
  *
  * <p>Other trees and colours: -Ppictures="maple_medium_fwhip_1=#2a46c8,#b46ae8;oak_..." -
  * archived trees with the colours of their fade; one colour alone means just that, and
- * &mistle behind the colours hangs mistletoe in the crown as TreeArchive does.
+ * &mistle behind the colours hangs mistletoe in the crown as TreeArchive does, and
+ * >cherry_leaves behind the id grows the tree with those leaves instead of its own.
  */
 public final class Pictures implements FabricClientGameTest {
 
@@ -52,7 +55,7 @@ public final class Pictures implements FabricClientGameTest {
     private static final int FADE_STEPS = 32;
 
     /** A tree to plant, with its colours: -1 and null leave it as it is. */
-    private record Tree(String id, int colour, int[] fade, String mistle) {
+    private record Tree(String id, int colour, int[] fade, String mistle, @Nullable Block leaves) {
     }
 
     private record Planted(Tree tree, int x, List<BlockPos> leaves, List<BlockPos> tinted, int width, int height) {
@@ -64,27 +67,32 @@ public final class Pictures implements FabricClientGameTest {
     private static List<Tree> trees(String asked) {
         if (asked.isBlank()) {
             return List.of(
-                    new Tree("maple_medium_fwhip_1", 0xB5361D, new int[] {0x7A1F12, 0xC8461D, 0xF0A33A}, ""),
-                    new Tree("larch_medium_snifferish_1", 0xD9A42B, new int[] {0x9A6A14, 0xE8C24A}, ""),
-                    new Tree("beech_medium_snifferish_1", 0xC8742A, new int[] {0x6B3A14, 0xC8742A, 0xF0B347}, ""),
-                    new Tree("silver_fir_medium_snifferish_1", -1, null, ""));
+                    new Tree("maple_medium_fwhip_1", 0xB5361D, new int[] {0x7A1F12, 0xC8461D, 0xF0A33A}, "", null),
+                    new Tree("larch_medium_snifferish_1", 0xD9A42B, new int[] {0x9A6A14, 0xE8C24A}, "", null),
+                    new Tree("beech_medium_snifferish_1", 0xC8742A, new int[] {0x6B3A14, 0xC8742A, 0xF0B347}, "", null),
+                    new Tree("silver_fir_medium_snifferish_1", -1, null, "", null));
         }
         List<Tree> trees = new ArrayList<>();
         for (String tree : asked.split(";")) {
             String[] idAndColours = tree.split("=", 2);
+            String[] idAndLeaves = idAndColours[0].trim().split(">", 2);
             String[] colourAndModifier = idAndColours[1].split("&", 2);
             String mistle = colourAndModifier.length > 1 ? colourAndModifier[1] : "";
             int[] stops = java.util.Arrays.stream(colourAndModifier[0].split(","))
                     .mapToInt(colour -> Integer.parseInt(colour.trim().replace("#", ""), 16))
                     .toArray();
             int[] fade = stops.length > 1 ? stops : new int[] {stops[0], stops[0]};
-            trees.add(new Tree(idAndColours[0].trim(), mix(fade, 0.5), fade, mistle));
+            Block leaves = idAndLeaves.length > 1
+                    ? BuiltInRegistries.BLOCK.getValue(Identifier.withDefaultNamespace(idAndLeaves[1])) : null;
+            trees.add(new Tree(idAndLeaves[0], mix(fade, 0.5), fade, mistle, leaves));
         }
         return trees;
     }
 
     private static final Set<Block> TINTED = Set.of(Blocks.OAK_LEAVES, Blocks.SPRUCE_LEAVES, Blocks.BIRCH_LEAVES,
-            Blocks.JUNGLE_LEAVES, Blocks.ACACIA_LEAVES, Blocks.DARK_OAK_LEAVES, Blocks.MANGROVE_LEAVES);
+            Blocks.JUNGLE_LEAVES, Blocks.ACACIA_LEAVES, Blocks.DARK_OAK_LEAVES, Blocks.MANGROVE_LEAVES,
+            Blocks.AZALEA_LEAVES, Blocks.FLOWERING_AZALEA_LEAVES, Blocks.CHERRY_LEAVES, Blocks.PALE_OAK_LEAVES,
+            Blocks.RED_POPLAR_LEAVES, Blocks.ORANGE_POPLAR_LEAVES, Blocks.YELLOW_POPLAR_LEAVES);
 
     private enum Look { NONE, COLOUR, FADE_UP, FADE_OUT }
 
@@ -106,12 +114,7 @@ public final class Pictures implements FabricClientGameTest {
                 colour(server, planted, look, bright, coloured);
                 String name = names[look.ordinal()] + (bright ? "_hell" : "");
                 if (planted.size() > 1) {
-                    Planted first = planted.getFirst();
-                    Planted last = planted.getLast();
-                    int height = planted.stream().mapToInt(Planted::height).max().orElse(0);
-                    int width = last.x() + last.width() / 2 - (first.x() - first.width() / 2);
-                    view(context, game, server, (first.x() + last.x()) / 2.0 + 0.5, GROUND + height / 2,
-                            -distance(width, height), 5);
+                    viewRow(context, game, server, planted);
                     shoot(context, "reihe_" + name);
                 }
                 for (Planted tree : planted) {
@@ -124,7 +127,26 @@ public final class Pictures implements FabricClientGameTest {
                 }
               }
             }
+            // One colour once more with opaque leaves, which draw everything on the solid layer.
+            if (planted.size() > 1) {
+                colour(server, planted, Look.COLOUR, false, coloured);
+                context.runOnClient(client -> client.options.cutoutLeaves().set(false));
+                viewRow(context, game, server, planted);
+                shoot(context, "reihe_5_einfarbig_blaetter_deckend");
+                context.runOnClient(client -> client.options.cutoutLeaves().set(true));
+            }
         }
+    }
+
+    /** Stands back far enough to have all the trees in the picture. */
+    private static void viewRow(ClientGameTestContext context, TestSingleplayerContext game, TestServerContext server,
+                                List<Planted> planted) {
+        Planted first = planted.getFirst();
+        Planted last = planted.getLast();
+        int height = planted.stream().mapToInt(Planted::height).max().orElse(0);
+        int width = last.x() + last.width() / 2 - (first.x() - first.width() / 2);
+        view(context, game, server, (first.x() + last.x()) / 2.0 + 0.5, GROUND + height / 2,
+                -distance(width, height), 5);
     }
 
     /**
@@ -291,6 +313,9 @@ public final class Pictures implements FabricClientGameTest {
             BlockState state = states.getOrDefault(value, Blocks.AIR.defaultBlockState());
             if (state.isAir() || y >= height) {
                 continue;
+            }
+            if (tree.leaves() != null && state.is(BlockTags.LEAVES)) {
+                state = tree.leaves().defaultBlockState();
             }
             if (state.hasProperty(LeavesBlock.PERSISTENT)) {
                 state = state.setValue(LeavesBlock.PERSISTENT, true);
