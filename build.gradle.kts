@@ -46,3 +46,8 @@ tasks.processResources {
         expand("version" to version)
     }
 }
+
+// Apache-2.0 4(d): LICENSE and NOTICE travel with every copy of the jar.
+tasks.jar {
+    metaInf { from("LICENSE", "NOTICE") }
+}
