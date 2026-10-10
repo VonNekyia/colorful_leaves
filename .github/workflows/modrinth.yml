@@ -1,0 +1,95 @@
+name: Modrinth
+
+# Uploads the jar of a published release as a version to Modrinth, with the
+# notes from notizen.sh, using curl against the API: no third-party action gets
+# the token. By hand with the tag as input. Versions up to 1.0.0 were uploaded
+# by hand; the workflow uploads only later ones.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the release, such as v1.0.1
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  # The project on Modrinth: https://modrinth.com/mod/colorfulleaves
+  MODRINTH_PROJECT: colorfulleaves
+  MODRINTH_API: https://api.modrinth.com/v2
+  # Fabric API on Modrinth, which the mod needs.
+  FABRIC_API: P7dR8mSH
+  MINECRAFT: '["26.3"]'
+  # The last version uploaded by hand.
+  BY_HAND: 1.0.0
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  modrinth:
+    name: To Modrinth
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      # CHANGELOG.md, NOTICE and notizen.sh as they are at the tag.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      # The token comes only from the secret and is masked, never in the log.
+      # Without the secret only a warning; the release stays green.
+      - name: Upload
+        timeout-minutes: 15
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$MODRINTH_TOKEN" ]; then
+            echo "::warning::The secret MODRINTH_TOKEN is missing; nothing uploaded to Modrinth"
+            exit 0
+          fi
+          echo "::add-mask::$MODRINTH_TOKEN"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || { echo "::error::$TAG is no release tag like v1.2.3"; exit 1; }
+          version=${TAG#v}
+          if [ "$(printf '%s\n%s\n' "$version" "$BY_HAND" | sort -V | tail -1)" = "$BY_HAND" ]; then
+            echo "::notice::$version is not after $BY_HAND; versions up to it were uploaded by hand"
+            exit 0
+          fi
+
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir dist --pattern '*.jar' --pattern SHA256SUMS
+          (cd dist && sha256sum -c SHA256SUMS)
+          jar=dist/ColorfulLeaves-$version.jar
+          test -f "$jar" || { echo "::error::$jar is missing in the release"; exit 1; }
+
+          agent="VonNekyia/colorful_leaves/$version (contact@mcterranova.com)"
+          api() { curl -fsS --retry 3 --retry-delay 10 --retry-all-errors -A "$agent" -H "Authorization: $MODRINTH_TOKEN" "$@"; }
+
+          # While the project is under review the API answers only with a token; so the ID only here.
+          project=$(api "$MODRINTH_API/project/$MODRINTH_PROJECT" | jq -r .id)
+          [ -n "$project" ] && [ "$project" != null ] || { echo "::error::project $MODRINTH_PROJECT not found"; exit 1; }
+
+          # If the version exists already, after a second run say, nothing is uploaded.
+          if api "$MODRINTH_API/project/$project/version" | jq -e --arg v "$version" 'any(.[]; .version_number == $v)' > /dev/null; then
+            echo "$version exists on Modrinth"
+            exit 0
+          fi
+
+          bash .github/notizen.sh "$version" > notes.md
+          jq -n --arg name "ColorfulLeaves $version" --arg v "$version" --arg project "$project" --arg fabric "$FABRIC_API" \
+            --rawfile changelog notes.md --argjson minecraft "$MINECRAFT" \
+            '{name: $name, version_number: $v, changelog: $changelog, project_id: $project,
+              dependencies: [{project_id: $fabric, dependency_type: "required"}],
+              game_versions: $minecraft, loaders: ["fabric"], version_type: "release",
+              featured: true, status: "listed", file_parts: ["jar"], primary_file: "jar"}' > version.json
+          # No --retry: an upload that arrived despite an error would make a second version.
+          curl -fsS -A "$agent" -H "Authorization: $MODRINTH_TOKEN" -X POST "$MODRINTH_API/version" \
+            -F "data=<version.json;type=application/json" -F "jar=@$jar;type=application/java-archive" \
+            | jq '{id, version_number, files: [.files[].filename]}'
