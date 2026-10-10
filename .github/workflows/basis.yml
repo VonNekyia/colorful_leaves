@@ -1,0 +1,40 @@
+name: Basis
+
+# A pull request goes against the default branch only, and only when it holds
+# its latest state. So no stacked pull request lands in another branch, and
+# nothing is merged over an old state. No path filter, so the check runs on
+# every pull request; `edited` catches a change of the base.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  basis:
+    # The name stays exactly so; the branch rule points to it.
+    name: Basis aktuell
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check base and state
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASIS: ${{ github.base_ref }}
+          STANDARD: ${{ github.event.repository.default_branch }}
+          KOPF: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$BASIS" != "$STANDARD" ]; then
+            echo "::error::The base is $BASIS, not $STANDARD. Merge the predecessor first, then move this pull request to $STANDARD."
+            exit 1
+          fi
+          hinten=$(gh api "repos/$REPO/compare/$STANDARD...$KOPF" --jq .behind_by)
+          if [ "$hinten" -ne 0 ]; then
+            echo "::error::$hinten commits of $STANDARD are missing. Rebase onto $STANDARD or merge $STANDARD in first."
+            exit 1
+          fi
+          echo "Base $STANDARD, on its latest state."
