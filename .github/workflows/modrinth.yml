@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+# Release and dispatch for the same tag run one after the other, never at once; otherwise both would upload.
+concurrency: modrinth-${{ github.event.release.tag_name || inputs.tag }}
+
 env:
   # The project on Modrinth: https://modrinth.com/mod/colorfulleaves
   MODRINTH_PROJECT: colorfulleaves
@@ -77,7 +80,9 @@ jobs:
           [ -n "$project" ] && [ "$project" != null ] || { echo "::error::project $MODRINTH_PROJECT not found"; exit 1; }
 
           # If the version exists already, after a second run say, nothing is uploaded.
-          if api "$MODRINTH_API/project/$project/version" | jq -e --arg v "$version" 'any(.[]; .version_number == $v)' > /dev/null; then
+          # First the list, then the check: inside the if, set -e and pipefail do not apply, a failure would read as missing.
+          versions=$(api "$MODRINTH_API/project/$project/version")
+          if jq -e --arg v "$version" 'any(.[]; .version_number == $v)' <<< "$versions" > /dev/null; then
             echo "$version exists on Modrinth"
             exit 0
           fi
