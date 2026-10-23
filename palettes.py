@@ -6,8 +6,8 @@ and prints them as tables for the map renderer:
 Tinted leaves are grey already: their bright copy is round(60 + c / top * 195) per channel,
 top the highest channel over all their colours. Leaves with their colour painted in get a
 grey copy first - their luminance, the lightest at oak's lightest grey - and their bright
-copy from that grey the same way. The flowers of flowering azalea stay out of both copies,
-transparent there, and get a copy of their own with nothing but them.
+copy from that grey the same way. The flowers of flowering azalea stay out of both, and so
+out of the tint: the mod draws them as they are.
 """
 import io
 import sys
@@ -65,11 +65,9 @@ def main(jar_path):
         lightest = max(luminance(c) for c in leaves)
         grey = [(round(luminance(c) / lightest * OAK_TOP),) * 3 for c in leaves]
         save(f"{kind}_leaves", leaves + flowers)
-        # Transparent, but keeping their colour: opaque leaves show it, tinted.
+        # Transparent: the mod keeps these pixels as they are, out of the tint.
         save(f"{kind}_leaves_grey", grey + [(*c, 0) for c in flowers])
         save(f"{kind}_leaves_bright", [bright(g, OAK_TOP) for g in grey] + [(*c, 0) for c in flowers])
-        if flowers:
-            save(f"{kind}_leaves_flowers", [(0, 0, 0, 0)] * len(leaves) + flowers)
         print(f"{kind}_leaves (painted): " + ", ".join(
             f"{hex_(c)} -> grey {hex_(g)}, bright {hex_(bright(g, OAK_TOP))}" for c, g in zip(leaves, grey))
               + "".join(f", {hex_(c)} -> flower, untinted" for c in flowers))

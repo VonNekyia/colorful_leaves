@@ -9,3 +9,4 @@
 
 # Binary files should be left untouched
 *.jar           binary
+*.aseprite      binary
