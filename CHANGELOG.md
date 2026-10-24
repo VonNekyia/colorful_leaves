@@ -17,6 +17,7 @@ request built on another stays a draft until that one is merged.
 - **Secondary colour:** with a secondary colour from the server, the leaves of a block spread between the two colours, leaf by leaf.
 - **Blossoms:** with a blossom colour from the server, leaves bloom. Every kind has blossoms in its mask; cherry and flowering azalea take the colour on their own.
 - **Version 2 of the leaf colours** on the new channel `colorfulleaves:leaves`, with secondary colours and blossoms; version 1 on `colorfulleaves:chunk` stays as it is.
+- **Resource packs** whose leaf models bring textures of their own keep those parts as the pack draws them; only the leaves' own texture is coloured.
 
 ## 1.0.0
 

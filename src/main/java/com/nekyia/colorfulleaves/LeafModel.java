@@ -4,6 +4,7 @@ import com.nekyia.colorfulleaves.LeafColors.Look;
 import java.util.List;
 import java.util.function.Predicate;
 import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadEmitter;
+import net.fabricmc.fabric.api.client.renderer.v1.mesh.QuadView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
 import net.minecraft.client.renderer.block.dispatch.BlockStateModel;
@@ -45,7 +46,7 @@ record LeafModel(BlockStateModel model, Identifier texture) implements BlockStat
         // Opaque leaves put every quad on the solid layer, where each would cover the one
         // below: there the leaves come whole, in their colour, flowers and all.
         if (!Minecraft.getInstance().options.cutoutLeaves().get()) {
-            emitOn(whole, 0, emitter, level, pos, state, random, cullTest);
+            emitOn(whole, 0, true, emitter, level, pos, state, random, cullTest);
             return;
         }
         TextureAtlasSprite[] parts = new TextureAtlasSprite[3];
@@ -54,24 +55,32 @@ record LeafModel(BlockStateModel model, Identifier texture) implements BlockStat
         }
         if (parts[2] != null) {
             for (int part = 0; part < 3; part++) {
-                emitOn(parts[part], part, emitter, level, pos, state, random, cullTest);
+                emitOn(parts[part], part, part == 0, emitter, level, pos, state, random, cullTest);
             }
         } else {
-            emitOn(whole, 0, emitter, level, pos, state, random, cullTest);
+            emitOn(whole, 0, true, emitter, level, pos, state, random, cullTest);
         }
         TextureAtlasSprite over = look.blossom() != 0 ? copy(LeafLayers.BLOSSOMS) : copy(LeafLayers.FLOWERS);
         if (over != null) {
-            emitOn(over, look.blossom() != 0 ? LeafColors.BLOSSOMS : -1, emitter, level, pos, state, random, cullTest);
+            emitOn(over, look.blossom() != 0 ? LeafColors.BLOSSOMS : -1, false, emitter, level, pos, state, random, cullTest);
         }
     }
 
-    /** The model's quads on {@code to} instead of the leaves' own texture, with that tint. */
-    private void emitOn(TextureAtlasSprite to, int tintIndex, QuadEmitter emitter, BlockAndTintGetter level,
-                        BlockPos pos, BlockState state, RandomSource random, Predicate<Direction> cullTest) {
+    /**
+     * The model's quads on {@code to} instead of the leaves' own texture, with that tint.
+     * Quads on another texture - a resource pack's model may bring its own - stay as they
+     * are, drawn on the {@code first} layer only.
+     */
+    private void emitOn(TextureAtlasSprite to, int tintIndex, boolean first, QuadEmitter emitter,
+                        BlockAndTintGetter level, BlockPos pos, BlockState state, RandomSource random,
+                        Predicate<Direction> cullTest) {
         TextureAtlasSprite from = sprite(texture);
         float du = to.getU0() - from.getU0();
         float dv = to.getV0() - from.getV0();
         emitter.pushTransform(quad -> {
+            if (!on(from, quad)) {
+                return first;
+            }
             for (int vertex = 0; vertex < 4; vertex++) {
                 quad.uv(vertex, quad.u(vertex) + du, quad.v(vertex) + dv);
             }
@@ -80,6 +89,21 @@ record LeafModel(BlockStateModel model, Identifier texture) implements BlockStat
         });
         model.emitQuads(emitter, level, pos, state, random, cullTest);
         emitter.popTransform();
+    }
+
+    /** Whether the quad's corners all lie on this sprite of the atlas. */
+    private static boolean on(TextureAtlasSprite sprite, QuadView quad) {
+        // Far below a texel, for corners baked a rounding off the sprite's edge.
+        float slack = 1e-5f;
+        for (int vertex = 0; vertex < 4; vertex++) {
+            float u = quad.u(vertex);
+            float v = quad.v(vertex);
+            if (u < sprite.getU0() - slack || u > sprite.getU1() + slack
+                    || v < sprite.getV0() - slack || v > sprite.getV1() + slack) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** A copy of the leaves' texture, or null where a resource pack left it out. */
